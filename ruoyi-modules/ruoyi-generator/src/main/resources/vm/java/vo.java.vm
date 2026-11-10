@@ -1,0 +1,48 @@
+package ${packageName}.domain.vo;
+
+#foreach ($import in $importVoList)
+import ${import};
+#end
+import ${packageName}.domain.${ClassName};
+import cn.idev.excel.annotation.ExcelIgnoreUnannotated;
+import cn.idev.excel.annotation.ExcelProperty;
+import org.dromara.common.excel.annotation.ExcelDictFormat;
+import org.dromara.common.excel.convert.ExcelDictConvert;
+import io.github.linpeilie.annotations.AutoMapper;
+import lombok.Data;
+import java.io.Serial;
+import java.io.Serializable;
+
+/**
+ * ${functionName}视图对象 ${tableName}
+ *
+ * @author ${author}
+ * @date ${datetime}
+ */
+@Data
+@ExcelIgnoreUnannotated
+@AutoMapper(target = ${ClassName}.class)
+public class ${ClassName}Vo implements Serializable {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+#foreach ($column in $columns)
+#if($column.isList() || $column.isPk() || $column.isEdit() || $column.isInsert() || $column.isDetail())
+    /**
+     * $column.columnComment
+     */
+#if($column.htmlType == "editor")
+    @EditorValue
+#end
+#if(${column.dictType} && ${column.dictType} != '')
+    @ExcelProperty(value = "${column.simpleComment()}", converter = ExcelDictConvert.class)
+    @ExcelDictFormat(dictType = "${column.dictType}")
+#else
+    @ExcelProperty(value = "${column.simpleComment()}")
+#end
+    private $column.javaType $column.javaField;
+
+#end
+#end
+}
