@@ -1,11 +1,8 @@
---- # 临时文件存储位置 避免临时文件被系统清理报错
-spring.servlet.multipart.location: /ruoyi/server/temp
-
 --- # 监控中心配置
 spring.boot.admin.client:
   # 增加客户端开关
   enabled: false
-  url: http://${SPRING_BOOT_ADMIN_SERVER_HOST:ruoyi-monitor-admin}:${SPRING_BOOT_ADMIN_SERVER_PORT:9090}/admin
+  url: http://localhost:9090/admin
   instance:
     service-host-type: IP
     metadata:
@@ -16,14 +13,14 @@ spring.boot.admin.client:
 
 --- # snail-job 配置
 snail-job:
-  enabled: true
+  enabled: false
   # 需要在 SnailJob 后台组管理创建对应名称的组,然后创建任务的时候选择对应的组,才能正确分派任务
   group: "ruoyi_group"
-  # SnailJob 接入验证令牌 详见 script/sql/ry_job.sql `sj_group_config`表
+  # SnailJob 接入验证令牌 详见 script/sql/ry_job.sql `sj_group_config` 表
   token: "SJ_cKqBTPzCsWA3VyuCfFoccmuIEGXjr5KT"
   server:
-    host: ${SNAIL_JOB_SERVER_HOST:ruoyi-snailjob-server}
-    port: ${SNAIL_JOB_SERVER_PORT:17888}
+    host: 127.0.0.1
+    port: 17888
   # 命名空间UUID 详见 script/sql/ry_job.sql `sj_namespace`表`unique_id`字段
   namespace: ${spring.profiles.active}
   # 随主应用端口漂移
@@ -38,7 +35,7 @@ spring:
     # 动态数据源文档 https://www.kancloud.cn/tracy5546/dynamic-datasource/content
     dynamic:
       # 性能分析插件(有性能损耗 不建议生产环境使用)
-      p6spy: false
+      p6spy: true
       # 设置默认的数据源或者数据源组,默认值即为 master
       primary: master
       # 严格模式 匹配不到数据源则报错
@@ -47,12 +44,15 @@ spring:
         # 主库数据源
         master:
           type: ${spring.datasource.type}
-          driverClassName: ${DATABASE_DRIVER_CLASS_NAME:com.mysql.cj.jdbc.Driver}
+          driverClassName: com.mysql.cj.jdbc.Driver
           # jdbc 所有参数配置参考 https://lionli.blog.csdn.net/article/details/122018562
           # rewriteBatchedStatements=true 批处理优化 大幅提升批量插入更新删除性能(对数据库有性能损耗 使用批量操作应考虑性能问题)
-          url: ${DATABASE_URL:jdbc:mysql://mysql:3306/ruoyi-tdesign?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8&autoReconnect=true&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true}
-          username: ${DATABASE_USERNAME:root}
-          password: ${DATABASE_PASSWORD:root}
+#          url: jdbc:mysql://106.75.153.103:3306/opc_admin?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=false&serverTimezone=GMT%2B8&autoReconnect=true&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true
+#          username: root
+#          password: 'mysql_SYbXCk'
+          url: jdbc:mysql://106.15.53.78:3306/cm_opc_workbench?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8&autoReconnect=true&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true
+          username: root
+          password: mysql_w5dWCF
         # 从库数据源
 #        slave:
 #          lazy: true
@@ -70,9 +70,9 @@ spring:
 #        postgres:
 #          type: ${spring.datasource.type}
 #          driverClassName: org.postgresql.Driver
-#          url: jdbc:postgresql://localhost:5432/postgres?useUnicode=true&characterEncoding=utf8&useSSL=true&autoReconnect=true&reWriteBatchedInserts=true
-#          username: root
-#          password: root
+#          url: jdbc:postgresql://127.0.0.1:5432/ruoyi-tdesign?currentSchema=public&useUnicode=true&characterEncoding=utf8&useSSL=true&autoReconnect=true&reWriteBatchedInserts=true&serverTimezone=Asia/Shanghai
+#          username: postgres
+#          password: 123456
 #        sqlserver:
 #          type: ${spring.datasource.type}
 #          driverClassName: com.microsoft.sqlserver.jdbc.SQLServerDriver
@@ -81,9 +81,9 @@ spring:
 #          password: root
       hikari:
         # 最大连接池数量
-        maximum-pool-size: 20
+        maximum-pool-size: 10
         # 最小空闲链接数量
-        #minimum-idle: 10
+        minimum-idle: 0
         # 配置获取连接等待超时的时间
         connectionTimeout: 30000
         # 校验超时时间
@@ -102,13 +102,15 @@ spring:
   data:
     redis:
       # 地址
-      host: ${REDIS_HOST:redis}
+#      host: 106.75.153.103
+      host: 106.15.53.78
       # 端口，默认为6379
-      port: ${REDIS_PORT:6379}
+      port: 6379
       # 数据库索引
-      database: ${REDIS_DATABASE:0}
+      database: 15
       # 密码(如没有密码请注释掉)
-#      password: ${REDIS_PASSWORD:}
+      password: redis_Zn7XFW
+      # password:
       # 连接超时时间
       timeout: 10s
       # 是否开启ssl
@@ -120,17 +122,17 @@ redisson:
   # redis key前缀
   keyPrefix: ${spring.application.name}
   # 线程池数量
-  threads: 16
+  threads: 4
   # Netty线程池数量
-  nettyThreads: 32
+  nettyThreads: 8
   # 单节点配置
   singleServerConfig:
     # 客户端名称
     clientName: ${spring.application.name}
     # 最小空闲连接数
-    connectionMinimumIdleSize: 32
+    connectionMinimumIdleSize: 8
     # 连接池大小
-    connectionPoolSize: 64
+    connectionPoolSize: 32
     # 连接空闲超时，单位：毫秒
     idleConnectionTimeout: 10000
     # 命令等待超时，单位：毫秒
@@ -138,11 +140,10 @@ redisson:
     # 发布和订阅连接池大小
     subscriptionConnectionPoolSize: 50
 
-
 --- # 三方授权
 justauth:
   # 前端外网访问地址
-  address: http://localhost:80
+  address: http://localhost:9002
   type:
     maxkey:
       # maxkey 服务器地址
@@ -153,11 +154,11 @@ justauth:
       redirect-uri: ${justauth.address}/social-callback?source=maxkey
     topiam:
       # topiam 服务器地址
-      server-url: http://127.0.0.1:1989/api/v1/authorize/y0q************spq***********8ol
+      server-url: http://127.0.0.1:1898/api/v1/authorize/y0q************spq***********8ol
       client-id: 449c4*********937************759
       client-secret: ac7***********1e0************28d
       redirect-uri: ${justauth.address}/social-callback?source=topiam
-      scopes: [ openid, email, phone, profile ]
+      scopes: [openid, email, phone, profile]
     qq:
       client-id: 10**********6
       client-secret: 1f7d08**********5b7**********29e
