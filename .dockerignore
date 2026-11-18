@@ -1,0 +1,13 @@
+.git
+.idea
+.vscode
+**/.DS_Store
+**/target
+**/logs
+**/*.iml
+**/*.log
+doc
+script
+CHANGELOG.md
+LICENSE
+README.md
