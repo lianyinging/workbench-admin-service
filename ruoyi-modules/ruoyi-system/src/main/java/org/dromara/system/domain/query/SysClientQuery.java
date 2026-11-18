@@ -25,6 +25,11 @@ public class SysClientQuery extends BaseEntity {
     private String clientKey;
 
     /**
+     * 设备类型
+     */
+    private String deviceType;
+
+    /**
      * 状态（1正常 0停用）
      */
     private String status;

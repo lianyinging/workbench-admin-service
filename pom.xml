@@ -89,7 +89,7 @@
                 <monitor.password>123456</monitor.password>
             </properties>
             <activation>
-                <!-- 默认环境 -->
+                <!-- OPC 本地默认走 application-dev.yml（MySQL / Redis 由用户在该文件配置） -->
                 <activeByDefault>true</activeByDefault>
             </activation>
         </profile>

@@ -193,6 +193,8 @@ tenant:
     - sys_sensitive_word
     - sys_file_category
     - sys_storage_config
+    - opc_desktop_device
+    - opc_desktop_user_app
 
 # MyBatisPlus配置
 # https://baomidou.com/config/
