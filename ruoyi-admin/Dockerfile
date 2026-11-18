@@ -1,5 +1,5 @@
 # 贝尔实验室 Spring 官方推荐镜像 JDK下载地址 https://bell-sw.com/pages/downloads/
-FROM bellsoft/liberica-openjdk-rocky:17.0.16-cds
+FROM docker.m.daocloud.io/library/eclipse-temurin:17
 #FROM bellsoft/liberica-openjdk-rocky:21.0.8-cds
 #FROM findepi/graalvm:java17-native
 
@@ -13,7 +13,7 @@ WORKDIR /ruoyi/server
 
 ENV SERVER_PORT=9080 SNAIL_PORT=29080 LANG=C.UTF-8 LC_ALL=C.UTF-8 JAVA_OPTS=""
 
-ARG JAR_FILE=*.jar
+ARG JAR_FILE=target/ruoyi-admin.jar
 COPY ${JAR_FILE} ./app.jar
 
 EXPOSE ${SERVER_PORT}
