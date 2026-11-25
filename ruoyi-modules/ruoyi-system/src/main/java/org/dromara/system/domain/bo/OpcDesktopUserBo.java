@@ -8,6 +8,7 @@ import org.dromara.common.core.validate.EditGroup;
 
 import java.io.Serial;
 import java.io.Serializable;
+import java.util.List;
 
 /**
  * 桌面端用户业务对象
@@ -38,7 +39,13 @@ public class OpcDesktopUserBo implements Serializable {
     private String subscribed;
 
     /** 订阅的行业应用 ID 列表（多选） */
-    private java.util.List<Long> appIds;
+    private List<Long> appIds;
+
+    /** 订阅的同事 ID 列表（多选） */
+    private List<Long> coworkerIds;
+
+    /** 同事工具授权 */
+    private List<OpcDesktopUserCoworkerToolBo> coworkerTools;
 
     @Size(max = 500, message = "备注不能超过500字")
     private String remark;

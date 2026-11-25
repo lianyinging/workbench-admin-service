@@ -16,16 +16,26 @@ import org.dromara.common.mybatis.core.page.SortQuery;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.common.redis.utils.RedisUtils;
 import org.dromara.common.tenant.helper.TenantHelper;
+import org.dromara.system.domain.OpcCoworker;
+import org.dromara.system.domain.OpcCoworkerMcpTool;
 import org.dromara.system.domain.OpcDesktopDevice;
 import org.dromara.system.domain.OpcDesktopUser;
 import org.dromara.system.domain.OpcDesktopUserApp;
+import org.dromara.system.domain.OpcDesktopUserCoworker;
+import org.dromara.system.domain.OpcDesktopUserCoworkerTool;
 import org.dromara.system.domain.OpcIndustryApp;
 import org.dromara.system.domain.bo.OpcDesktopLoginBo;
 import org.dromara.system.domain.bo.OpcDesktopUserBo;
+import org.dromara.system.domain.bo.OpcDesktopUserCoworkerToolBo;
 import org.dromara.system.domain.query.OpcDesktopUserQuery;
+import org.dromara.system.domain.vo.OpcDesktopUserCoworkerToolVo;
 import org.dromara.system.domain.vo.OpcDesktopUserVo;
+import org.dromara.system.mapper.OpcCoworkerMapper;
+import org.dromara.system.mapper.OpcCoworkerMcpToolMapper;
 import org.dromara.system.mapper.OpcDesktopDeviceMapper;
 import org.dromara.system.mapper.OpcDesktopUserAppMapper;
+import org.dromara.system.mapper.OpcDesktopUserCoworkerMapper;
+import org.dromara.system.mapper.OpcDesktopUserCoworkerToolMapper;
 import org.dromara.system.mapper.OpcDesktopUserMapper;
 import org.dromara.system.mapper.OpcIndustryAppMapper;
 import org.dromara.system.service.IOpcDesktopUserService;
@@ -61,6 +71,10 @@ public class OpcDesktopUserServiceImpl extends ServiceImpl<OpcDesktopUserMapper,
     private final OpcDesktopDeviceMapper deviceMapper;
     private final OpcDesktopUserAppMapper userAppMapper;
     private final OpcIndustryAppMapper industryAppMapper;
+    private final OpcDesktopUserCoworkerMapper userCoworkerMapper;
+    private final OpcDesktopUserCoworkerToolMapper userCoworkerToolMapper;
+    private final OpcCoworkerMapper coworkerMapper;
+    private final OpcCoworkerMcpToolMapper coworkerMcpToolMapper;
 
     @Override
     public TableDataInfo<OpcDesktopUserVo> queryPageList(OpcDesktopUserQuery query) {
@@ -76,10 +90,18 @@ public class OpcDesktopUserServiceImpl extends ServiceImpl<OpcDesktopUserMapper,
             Map<Long, List<Long>> appIdsByUser = appIdsByUserIds(ids);
             Map<Long, String> appTitleMap = appTitleMap(appIdsByUser.values().stream()
                 .flatMap(Collection::stream).collect(Collectors.toSet()));
+            Map<Long, List<Long>> coworkerIdsByUser = coworkerIdsByUserIds(ids);
+            Map<Long, String> coworkerTitleMap = coworkerTitleMap(coworkerIdsByUser.values().stream()
+                .flatMap(Collection::stream).collect(Collectors.toSet()));
+            Map<Long, List<OpcDesktopUserCoworkerToolVo>> toolsByUser = coworkerToolsByUserIds(ids);
             return users.stream()
                 .map(u -> {
                     OpcDesktopUserVo vo = OpcDesktopUserVo.from(u, online.getOrDefault(u.getUserId(), false));
                     fillAppFields(vo, appIdsByUser.getOrDefault(u.getUserId(), List.of()), appTitleMap);
+                    fillCoworkerFields(vo,
+                        coworkerIdsByUser.getOrDefault(u.getUserId(), List.of()),
+                        coworkerTitleMap,
+                        toolsByUser.getOrDefault(u.getUserId(), List.of()));
                     return vo;
                 })
                 .collect(Collectors.toList());
@@ -104,6 +126,9 @@ public class OpcDesktopUserServiceImpl extends ServiceImpl<OpcDesktopUserMapper,
             List<Long> appIds = listAppIdsByUserId(userId);
             Map<Long, String> titles = appTitleMap(new HashSet<>(appIds));
             fillAppFields(vo, appIds, titles);
+            List<Long> coworkerIds = listCoworkerIdsByUserId(userId);
+            Map<Long, String> coworkerTitles = coworkerTitleMap(new HashSet<>(coworkerIds));
+            fillCoworkerFields(vo, coworkerIds, coworkerTitles, listCoworkerToolsByUserId(userId));
         }
         return vo;
     }
@@ -113,18 +138,20 @@ public class OpcDesktopUserServiceImpl extends ServiceImpl<OpcDesktopUserMapper,
     public Boolean insertByBo(OpcDesktopUserBo bo) {
         checkUserNameUnique(null, bo.getUserName());
         List<Long> appIds = normalizeAppIds(bo.getAppIds());
+        List<Long> coworkerIds = normalizeAppIds(bo.getCoworkerIds());
         OpcDesktopUser user = new OpcDesktopUser();
         user.setTenantId(DEFAULT_TENANT);
         user.setUserName(bo.getUserName().trim());
         user.setNickName(StrUtil.blankToDefault(bo.getNickName(), bo.getUserName().trim()));
         user.setPassword(BCrypt.hashpw(bo.getPassword()));
         user.setStatus(StrUtil.blankToDefault(bo.getStatus(), "1"));
-        user.setSubscribed(appIds.isEmpty() ? "0" : "1");
+        user.setSubscribed(appIds.isEmpty() && coworkerIds.isEmpty() ? "0" : "1");
         user.setRemark(bo.getRemark());
         user.setDelFlag("0");
         boolean ok = save(user);
         if (ok) {
             replaceUserApps(user.getUserId(), appIds);
+            replaceUserCoworkers(user.getUserId(), coworkerIds, bo.getCoworkerTools());
         }
         return ok;
     }
@@ -141,12 +168,13 @@ public class OpcDesktopUserServiceImpl extends ServiceImpl<OpcDesktopUserMapper,
         }
         checkUserNameUnique(bo.getUserId(), bo.getUserName());
         List<Long> appIds = normalizeAppIds(bo.getAppIds());
+        List<Long> coworkerIds = normalizeAppIds(bo.getCoworkerIds());
         existing.setUserName(bo.getUserName().trim());
         existing.setNickName(StrUtil.blankToDefault(bo.getNickName(), bo.getUserName().trim()));
         if (StringUtils.isNotBlank(bo.getStatus())) {
             existing.setStatus(bo.getStatus());
         }
-        existing.setSubscribed(appIds.isEmpty() ? "0" : "1");
+        existing.setSubscribed(appIds.isEmpty() && coworkerIds.isEmpty() ? "0" : "1");
         existing.setRemark(bo.getRemark());
         if (StringUtils.isNotBlank(bo.getPassword())) {
             existing.setPassword(BCrypt.hashpw(bo.getPassword()));
@@ -155,6 +183,7 @@ public class OpcDesktopUserServiceImpl extends ServiceImpl<OpcDesktopUserMapper,
         boolean ok = updateById(existing);
         if (ok) {
             replaceUserApps(bo.getUserId(), appIds);
+            replaceUserCoworkers(bo.getUserId(), coworkerIds, bo.getCoworkerTools());
             if ("0".equals(existing.getStatus())) {
                 invalidateSessions(bo.getUserId());
             }
@@ -205,6 +234,8 @@ public class OpcDesktopUserServiceImpl extends ServiceImpl<OpcDesktopUserMapper,
         boolean ok = removeByIds(ids);
         if (ok) {
             userAppMapper.delete(Wrappers.<OpcDesktopUserApp>lambdaQuery().in(OpcDesktopUserApp::getUserId, ids));
+            userCoworkerMapper.delete(Wrappers.<OpcDesktopUserCoworker>lambdaQuery().in(OpcDesktopUserCoworker::getUserId, ids));
+            userCoworkerToolMapper.delete(Wrappers.<OpcDesktopUserCoworkerTool>lambdaQuery().in(OpcDesktopUserCoworkerTool::getUserId, ids));
             for (Long id : ids) {
                 invalidateSessions(id);
             }
@@ -311,19 +342,37 @@ public class OpcDesktopUserServiceImpl extends ServiceImpl<OpcDesktopUserMapper,
 
     @Override
     public Set<Long> listSubscribedAppIds(String accessToken) {
-        if (StringUtils.isBlank(accessToken)) {
+        Long userId = resolveUserId(accessToken);
+        if (userId == null) {
             return Set.of();
+        }
+        return new HashSet<>(listAppIdsByUserId(userId));
+    }
+
+    @Override
+    public Set<Long> listSubscribedCoworkerIds(String accessToken) {
+        Long userId = resolveUserId(accessToken);
+        if (userId == null) {
+            return Set.of();
+        }
+        return new HashSet<>(listCoworkerIdsByUserId(userId));
+    }
+
+    @Override
+    public Long resolveUserId(String accessToken) {
+        if (StringUtils.isBlank(accessToken)) {
+            return null;
         }
         Map<String, Object> session = RedisUtils.getObject(USER_TOKEN_KEY_PREFIX + accessToken);
         if (session == null || session.get("userId") == null) {
-            return Set.of();
+            return null;
         }
         Long userId = Long.valueOf(String.valueOf(session.get("userId")));
         OpcDesktopUser user = TenantHelper.dynamicTenant(DEFAULT_TENANT, () -> getById(userId));
         if (user == null || "0".equals(user.getStatus())) {
-            return Set.of();
+            return null;
         }
-        return new HashSet<>(listAppIdsByUserId(userId));
+        return userId;
     }
 
     @Override
@@ -446,5 +495,139 @@ public class OpcDesktopUserServiceImpl extends ServiceImpl<OpcDesktopUserMapper,
             row.setAppId(appId);
             userAppMapper.insert(row);
         }
+    }
+
+    private List<Long> listCoworkerIdsByUserId(Long userId) {
+        if (userId == null) {
+            return List.of();
+        }
+        return userCoworkerMapper.selectList(Wrappers.<OpcDesktopUserCoworker>lambdaQuery()
+                .eq(OpcDesktopUserCoworker::getUserId, userId)
+                .select(OpcDesktopUserCoworker::getCoworkerId))
+            .stream()
+            .map(OpcDesktopUserCoworker::getCoworkerId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toList());
+    }
+
+    private Map<Long, List<Long>> coworkerIdsByUserIds(Collection<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<OpcDesktopUserCoworker> rows = userCoworkerMapper.selectList(
+            Wrappers.<OpcDesktopUserCoworker>lambdaQuery().in(OpcDesktopUserCoworker::getUserId, userIds));
+        Map<Long, List<Long>> map = new HashMap<>();
+        for (OpcDesktopUserCoworker row : rows) {
+            if (row.getUserId() == null || row.getCoworkerId() == null) {
+                continue;
+            }
+            map.computeIfAbsent(row.getUserId(), k -> new ArrayList<>()).add(row.getCoworkerId());
+        }
+        return map;
+    }
+
+    private Map<Long, String> coworkerTitleMap(Collection<Long> coworkerIds) {
+        if (coworkerIds == null || coworkerIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        return coworkerMapper.selectList(Wrappers.<OpcCoworker>lambdaQuery()
+                .in(OpcCoworker::getCoworkerId, coworkerIds)
+                .select(OpcCoworker::getCoworkerId, OpcCoworker::getName))
+            .stream()
+            .collect(Collectors.toMap(OpcCoworker::getCoworkerId, OpcCoworker::getName, (a, b) -> a));
+    }
+
+    private List<OpcDesktopUserCoworkerToolVo> listCoworkerToolsByUserId(Long userId) {
+        return coworkerToolsByUserIds(userId == null ? Set.of() : Set.of(userId))
+            .getOrDefault(userId, List.of());
+    }
+
+    private Map<Long, List<OpcDesktopUserCoworkerToolVo>> coworkerToolsByUserIds(Collection<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<OpcDesktopUserCoworkerTool> rows = userCoworkerToolMapper.selectList(
+            Wrappers.<OpcDesktopUserCoworkerTool>lambdaQuery().in(OpcDesktopUserCoworkerTool::getUserId, userIds));
+        Map<Long, List<OpcDesktopUserCoworkerToolVo>> map = new HashMap<>();
+        for (OpcDesktopUserCoworkerTool row : rows) {
+            OpcDesktopUserCoworkerToolVo vo = new OpcDesktopUserCoworkerToolVo();
+            vo.setCoworkerId(row.getCoworkerId());
+            vo.setLogicalMcp(row.getLogicalMcp());
+            vo.setToolName(row.getToolName());
+            map.computeIfAbsent(row.getUserId(), k -> new ArrayList<>()).add(vo);
+        }
+        return map;
+    }
+
+    private static void fillCoworkerFields(OpcDesktopUserVo vo, List<Long> coworkerIds,
+                                           Map<Long, String> titleMap,
+                                           List<OpcDesktopUserCoworkerToolVo> tools) {
+        List<Long> ids = coworkerIds == null ? List.of() : coworkerIds;
+        vo.setCoworkerIds(ids);
+        vo.setCoworkerTitles(ids.stream()
+            .map(id -> titleMap.getOrDefault(id, String.valueOf(id)))
+            .collect(Collectors.toList()));
+        vo.setCoworkerTools(tools == null ? List.of() : tools);
+    }
+
+    private void replaceUserCoworkers(Long userId, List<Long> coworkerIds,
+                                      List<OpcDesktopUserCoworkerToolBo> coworkerTools) {
+        userCoworkerMapper.delete(Wrappers.<OpcDesktopUserCoworker>lambdaQuery()
+            .eq(OpcDesktopUserCoworker::getUserId, userId));
+        userCoworkerToolMapper.delete(Wrappers.<OpcDesktopUserCoworkerTool>lambdaQuery()
+            .eq(OpcDesktopUserCoworkerTool::getUserId, userId));
+        Set<Long> allowedCoworkers = new HashSet<>(coworkerIds == null ? List.of() : coworkerIds);
+        for (Long coworkerId : allowedCoworkers) {
+            OpcDesktopUserCoworker row = new OpcDesktopUserCoworker();
+            row.setUserId(userId);
+            row.setCoworkerId(coworkerId);
+            userCoworkerMapper.insert(row);
+        }
+        if (coworkerTools == null || coworkerTools.isEmpty() || allowedCoworkers.isEmpty()) {
+            return;
+        }
+        // 工具授权必须落在「已订同事」且属于该同事工具上限子集
+        Map<Long, Set<String>> allowedTools = coworkerAllowedToolNames(allowedCoworkers);
+        Set<String> seen = new HashSet<>();
+        for (OpcDesktopUserCoworkerToolBo item : coworkerTools) {
+            if (item == null || item.getCoworkerId() == null || StringUtils.isBlank(item.getToolName())) {
+                continue;
+            }
+            if (!allowedCoworkers.contains(item.getCoworkerId())) {
+                continue;
+            }
+            String toolName = item.getToolName().trim();
+            Set<String> upper = allowedTools.getOrDefault(item.getCoworkerId(), Set.of());
+            if (!upper.isEmpty() && !upper.contains(toolName)) {
+                continue;
+            }
+            String logical = StrUtil.blankToDefault(item.getLogicalMcp(), "");
+            String dedupe = item.getCoworkerId() + "|" + logical + "|" + toolName;
+            if (!seen.add(dedupe)) {
+                continue;
+            }
+            OpcDesktopUserCoworkerTool row = new OpcDesktopUserCoworkerTool();
+            row.setUserId(userId);
+            row.setCoworkerId(item.getCoworkerId());
+            row.setLogicalMcp(logical);
+            row.setToolName(toolName);
+            userCoworkerToolMapper.insert(row);
+        }
+    }
+
+    private Map<Long, Set<String>> coworkerAllowedToolNames(Collection<Long> coworkerIds) {
+        if (coworkerIds == null || coworkerIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<OpcCoworkerMcpTool> rows = coworkerMcpToolMapper.selectList(
+            Wrappers.<OpcCoworkerMcpTool>lambdaQuery().in(OpcCoworkerMcpTool::getCoworkerId, coworkerIds));
+        Map<Long, Set<String>> map = new HashMap<>();
+        for (OpcCoworkerMcpTool row : rows) {
+            if (row.getCoworkerId() == null || StringUtils.isBlank(row.getToolName())) {
+                continue;
+            }
+            map.computeIfAbsent(row.getCoworkerId(), k -> new HashSet<>()).add(row.getToolName().trim());
+        }
+        return map;
     }
 }

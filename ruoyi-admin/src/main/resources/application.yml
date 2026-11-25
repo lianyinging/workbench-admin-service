@@ -195,6 +195,9 @@ tenant:
     - sys_storage_config
     - opc_desktop_device
     - opc_desktop_user_app
+    - opc_desktop_user_coworker
+    - opc_desktop_user_coworker_tool
+    - opc_coworker_mcp_tool
 
 # MyBatisPlus配置
 # https://baomidou.com/config/

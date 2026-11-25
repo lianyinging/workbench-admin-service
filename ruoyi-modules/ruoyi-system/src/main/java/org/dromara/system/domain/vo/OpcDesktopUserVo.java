@@ -6,6 +6,7 @@ import org.dromara.system.domain.OpcDesktopUser;
 import java.io.Serial;
 import java.io.Serializable;
 import java.util.Date;
+import java.util.List;
 
 /**
  * 桌面端用户视图（不含密码）
@@ -28,10 +29,19 @@ public class OpcDesktopUserVo implements Serializable {
     private String subscribed;
 
     /** 订阅的行业应用 ID 列表 */
-    private java.util.List<Long> appIds;
+    private List<Long> appIds;
 
     /** 订阅应用标题（列表展示） */
-    private java.util.List<String> appTitles;
+    private List<String> appTitles;
+
+    /** 订阅的同事 ID 列表 */
+    private List<Long> coworkerIds;
+
+    /** 订阅同事名称（列表展示） */
+    private List<String> coworkerTitles;
+
+    /** 同事工具授权 */
+    private List<OpcDesktopUserCoworkerToolVo> coworkerTools;
 
     private String remark;
 

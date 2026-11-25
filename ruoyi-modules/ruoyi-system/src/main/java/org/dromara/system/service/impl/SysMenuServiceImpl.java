@@ -201,7 +201,10 @@ public class SysMenuServiceImpl extends ServiceImpl<SysMenuMapper, SysMenu> impl
             meta.setTitle(menu.getMenuName());
             meta.setIcon(menu.getIcon());
             meta.setNoCache(Objects.equals(YesNoEnum.NO.getCodeNum(), menu.getIsCache()));
-            meta.setLink(menu.getPath());
+            // 仅内链（http/https）写入 link；普通 path 写入会导致前端把业务页当成 iframe，出现套娃
+            if (StringUtils.ishttp(menu.getPath())) {
+                meta.setLink(menu.getPath());
+            }
             if (StrUtil.isNotBlank(menu.getHiddenExpression()) && standard.equalsValue(menu.getHiddenExpression(), true)) {
                 meta.setHidden(true);
             } else {

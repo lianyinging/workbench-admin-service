@@ -43,6 +43,12 @@ public interface IOpcDesktopUserService {
     /** 当前 token 对应用户已订阅的行业应用 ID（无效登录返回空集） */
     java.util.Set<Long> listSubscribedAppIds(String accessToken);
 
+    /** 当前 token 对应用户已订阅的同事 ID（无效登录返回空集） */
+    java.util.Set<Long> listSubscribedCoworkerIds(String accessToken);
+
+    /** 解析桌面登录 token → userId；无效返回 null */
+    Long resolveUserId(String accessToken);
+
     /**
      * 按 userId 批量取昵称（设备列表展示）
      */
