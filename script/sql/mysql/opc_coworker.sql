@@ -9,11 +9,13 @@ CREATE TABLE IF NOT EXISTS opc_coworker (
     description      varchar(1000)  DEFAULT ''              COMMENT '描述',
     icon             varchar(64)    DEFAULT ''              COMMENT '图标',
     group_key        varchar(32)    DEFAULT 'general'       COMMENT '分组',
+    category_id      bigint         DEFAULT NULL            COMMENT '所属分类ID',
     version          varchar(32)    DEFAULT '1.0.0'         COMMENT '版本',
     package_zip      longtext       DEFAULT NULL            COMMENT 'zip base64（可含 data URL 前缀）',
     package_sha256   varchar(64)    DEFAULT NULL            COMMENT '包内容 SHA-256',
     package_size     bigint         DEFAULT NULL            COMMENT '包原始字节数',
     visibility       varchar(16)    DEFAULT 'subscribe'     COMMENT 'public|login|subscribe',
+    mcp_config_id    bigint         DEFAULT NULL            COMMENT '绑定的 MCP 网关配置ID',
     sort_order       int            DEFAULT 0               COMMENT '排序，越小越前',
     status           char(1)        DEFAULT '1'             COMMENT '状态（1启用 0停用）',
     remark           varchar(500)   DEFAULT NULL            COMMENT '备注',
@@ -60,11 +62,14 @@ CREATE TABLE IF NOT EXISTS opc_desktop_user_coworker_tool (
 CREATE TABLE IF NOT EXISTS opc_mcp_gateway_config (
     config_id            bigint         NOT NULL AUTO_INCREMENT COMMENT '主键',
     tenant_id            varchar(20)    DEFAULT '000000'        COMMENT '租户编号',
+    config_name          varchar(128)   NOT NULL                COMMENT '配置名称',
     gateway_base_url     varchar(512)   DEFAULT NULL            COMMENT '网关 Base URL',
-    gateway_api_key      varchar(1024)  DEFAULT NULL            COMMENT '组织 Gateway Key',
+    gateway_api_key      varchar(1024)  DEFAULT NULL            COMMENT 'Gateway Key（不同同事可绑不同钥）',
     virtual_server_id    varchar(128)   DEFAULT NULL            COMMENT 'Virtual Server ID',
     admin_token          varchar(1024)  DEFAULT NULL            COMMENT '拉 catalog 用 Admin Token',
     remark               varchar(500)   DEFAULT NULL            COMMENT '备注',
+    status               char(1)        DEFAULT '1'             COMMENT '状态（1正常 0停用）',
+    sort_order           int            DEFAULT 0               COMMENT '排序',
     del_flag             char(1)        DEFAULT '0'             COMMENT '删除标志',
     create_dept          bigint         DEFAULT NULL            COMMENT '创建部门',
     create_by            bigint         DEFAULT NULL            COMMENT '创建者',
@@ -72,18 +77,32 @@ CREATE TABLE IF NOT EXISTS opc_mcp_gateway_config (
     update_by            bigint         DEFAULT NULL            COMMENT '更新者',
     update_time          datetime       DEFAULT NULL            COMMENT '更新时间',
     PRIMARY KEY (config_id),
-    UNIQUE KEY uk_opc_mcp_gateway_tenant (tenant_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='OPC MCP 网关组织配置';
+    KEY idx_opc_mcp_gateway_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='OPC MCP 网关配置（可多条）';
 
--- 菜单：客户端管理(15100) -> 同事 / MCP 网关
+-- 菜单：客户端管理(15100) -> 同事管理(目录) / MCP 网关
+-- 升级脚本见 opc_coworker_menu_manage.sql
 INSERT INTO sys_menu (
     menu_id, menu_name, parent_id, order_num, path, component, component_name, query_param,
     is_frame, is_cache, menu_type, visible, status, perms, icon,
     hidden_expression, shop_expression, create_dept, create_by, create_time, update_by, update_time, remark
 ) VALUES (
-    15150, '同事', 15100, 5, 'coworker', 'system/coworker/index', 'Coworker', '',
-    0, 1, 'C', '1', '1', 'system:coworker:list', 'user-talk',
-    NULL, NULL, 103, 1, NOW(), NULL, NULL, 'Opc WorkBench 同事目录'
+    15150, '同事管理', 15100, 5, 'coworker', NULL, NULL, NULL,
+    0, 1, 'M', '1', '1', NULL, 'user-talk',
+    NULL, NULL, 103, 1, NOW(), NULL, NULL, '同事管理目录'
+) ON DUPLICATE KEY UPDATE
+    menu_name = VALUES(menu_name), parent_id = VALUES(parent_id), path = VALUES(path),
+    component = VALUES(component), component_name = VALUES(component_name),
+    menu_type = VALUES(menu_type), perms = VALUES(perms), visible = '1', status = '1';
+
+INSERT INTO sys_menu (
+    menu_id, menu_name, parent_id, order_num, path, component, component_name, query_param,
+    is_frame, is_cache, menu_type, visible, status, perms, icon,
+    hidden_expression, shop_expression, create_dept, create_by, create_time, update_by, update_time, remark
+) VALUES (
+    15155, '同事列表', 15150, 1, 'list', 'system/coworker/index', 'Coworker', '',
+    0, 1, 'C', '1', '1', 'system:coworker:list', 'list',
+    NULL, NULL, 103, 1, NOW(), NULL, NULL, '同事目录列表'
 ) ON DUPLICATE KEY UPDATE
     menu_name = VALUES(menu_name), parent_id = VALUES(parent_id), path = VALUES(path),
     component = VALUES(component), component_name = VALUES(component_name),
@@ -94,11 +113,18 @@ INSERT INTO sys_menu (
     is_frame, is_cache, menu_type, visible, status, perms, icon,
     hidden_expression, shop_expression, create_dept, create_by, create_time, update_by, update_time, remark
 ) VALUES
-(15151, '同事查询', 15150, 1, '#', '', '', '', 0, 1, 'F', '1', '1', 'system:coworker:query', '#', NULL, NULL, 103, 1, NOW(), NULL, NULL, ''),
-(15152, '同事新增', 15150, 2, '#', '', '', '', 0, 1, 'F', '1', '1', 'system:coworker:add', '#', NULL, NULL, 103, 1, NOW(), NULL, NULL, ''),
-(15153, '同事修改', 15150, 3, '#', '', '', '', 0, 1, 'F', '1', '1', 'system:coworker:edit', '#', NULL, NULL, 103, 1, NOW(), NULL, NULL, ''),
-(15154, '同事删除', 15150, 4, '#', '', '', '', 0, 1, 'F', '1', '1', 'system:coworker:remove', '#', NULL, NULL, 103, 1, NOW(), NULL, NULL, '')
-ON DUPLICATE KEY UPDATE perms = VALUES(perms), visible = '1', status = '1';
+(15151, '同事查询', 15155, 1, '#', '', '', '', 0, 1, 'F', '1', '1', 'system:coworker:query', '#', NULL, NULL, 103, 1, NOW(), NULL, NULL, ''),
+(15152, '同事新增', 15155, 2, '#', '', '', '', 0, 1, 'F', '1', '1', 'system:coworker:add', '#', NULL, NULL, 103, 1, NOW(), NULL, NULL, ''),
+(15153, '同事修改', 15155, 3, '#', '', '', '', 0, 1, 'F', '1', '1', 'system:coworker:edit', '#', NULL, NULL, 103, 1, NOW(), NULL, NULL, ''),
+(15154, '同事删除', 15155, 4, '#', '', '', '', 0, 1, 'F', '1', '1', 'system:coworker:remove', '#', NULL, NULL, 103, 1, NOW(), NULL, NULL, ''),
+(15156, '轮播配置', 15150, 2, 'carousel', 'system/coworkerCarousel/index', 'CoworkerCarousel', '',
+ 0, 1, 'C', '1', '1', 'system:coworkerCarousel:list', 'slider', NULL, NULL, 103, 1, NOW(), NULL, NULL, '同事轮播配置（占位）')
+ON DUPLICATE KEY UPDATE
+    menu_name = VALUES(menu_name), parent_id = VALUES(parent_id), path = VALUES(path),
+    component = VALUES(component), component_name = VALUES(component_name),
+    perms = VALUES(perms), visible = '1', status = '1';
+
+-- 分类在同事列表左侧；按钮权限见 opc_coworker_category.sql
 
 INSERT INTO sys_menu (
     menu_id, menu_name, parent_id, order_num, path, component, component_name, query_param,
@@ -119,12 +145,15 @@ INSERT INTO sys_menu (
     hidden_expression, shop_expression, create_dept, create_by, create_time, update_by, update_time, remark
 ) VALUES
 (15161, 'MCP网关查询', 15160, 1, '#', '', '', '', 0, 1, 'F', '1', '1', 'system:mcpGateway:query', '#', NULL, NULL, 103, 1, NOW(), NULL, NULL, ''),
-(15162, 'MCP网关修改', 15160, 2, '#', '', '', '', 0, 1, 'F', '1', '1', 'system:mcpGateway:edit', '#', NULL, NULL, 103, 1, NOW(), NULL, NULL, '')
+(15162, 'MCP网关修改', 15160, 2, '#', '', '', '', 0, 1, 'F', '1', '1', 'system:mcpGateway:edit', '#', NULL, NULL, 103, 1, NOW(), NULL, NULL, ''),
+(15163, 'MCP网关新增', 15160, 3, '#', '', '', '', 0, 1, 'F', '1', '1', 'system:mcpGateway:add', '#', NULL, NULL, 103, 1, NOW(), NULL, NULL, ''),
+(15164, 'MCP网关删除', 15160, 4, '#', '', '', '', 0, 1, 'F', '1', '1', 'system:mcpGateway:remove', '#', NULL, NULL, 103, 1, NOW(), NULL, NULL, '')
 ON DUPLICATE KEY UPDATE perms = VALUES(perms), visible = '1', status = '1';
 
 INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES
-(1, 15150), (1, 15151), (1, 15152), (1, 15153), (1, 15154),
-(1, 15160), (1, 15161), (1, 15162);
+(1, 15150), (1, 15155), (1, 15151), (1, 15152), (1, 15153), (1, 15154),
+(1, 15156),
+(1, 15160), (1, 15161), (1, 15162), (1, 15163), (1, 15164);
 
 -- 已有库升级：旧版 opc_mcp_gateway_config 缺审计/逻辑删字段时执行
 -- ALTER TABLE opc_mcp_gateway_config ADD COLUMN del_flag char(1) DEFAULT '0' COMMENT '删除标志' AFTER remark;

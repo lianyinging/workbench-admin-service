@@ -14,6 +14,12 @@ public class OpcCoworkerQuery extends BasePageQuery {
 
     private String groupKey;
 
+    /** 按分类筛选；与 uncategorized 互斥 */
+    private Long categoryId;
+
+    /** true：仅查未分类（category_id IS NULL） */
+    private Boolean uncategorized;
+
     private String status;
 
     private String visibility;

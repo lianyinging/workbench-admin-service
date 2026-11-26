@@ -39,12 +39,18 @@ public class OpcCoworkerBo implements Serializable {
 
     private String groupKey;
 
+    /** 所属分类，可空 */
+    private Long categoryId;
+
     private String version;
 
     /** zip base64；编辑时为空表示不改包 */
     private String packageZipBase64;
 
     private String visibility;
+
+    /** 绑定的 MCP 网关配置 */
+    private Long mcpConfigId;
 
     private Integer sortOrder;
 

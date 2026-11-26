@@ -18,4 +18,7 @@ public class McpGatewayToolItemVo implements Serializable {
     private String description;
 
     private String gatewayId;
+
+    /** MCP 服务展示名（gateway name / slug） */
+    private String gatewayName;
 }

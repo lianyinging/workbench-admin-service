@@ -13,15 +13,19 @@ import org.dromara.common.mybatis.core.page.SortQuery;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.common.tenant.helper.TenantHelper;
 import org.dromara.system.domain.OpcCoworker;
+import org.dromara.system.domain.OpcCoworkerCategory;
 import org.dromara.system.domain.OpcCoworkerMcpTool;
+import org.dromara.system.domain.OpcMcpGatewayConfig;
 import org.dromara.system.domain.bo.OpcCoworkerBo;
 import org.dromara.system.domain.bo.OpcCoworkerToolItemBo;
 import org.dromara.system.domain.query.OpcCoworkerQuery;
 import org.dromara.system.domain.vo.OpcCoworkerToolItemVo;
 import org.dromara.system.domain.vo.OpcCoworkerVo;
 import org.dromara.system.domain.vo.OpcDesktopCoworkerPackageVo;
+import org.dromara.system.mapper.OpcCoworkerCategoryMapper;
 import org.dromara.system.mapper.OpcCoworkerMapper;
 import org.dromara.system.mapper.OpcCoworkerMcpToolMapper;
+import org.dromara.system.mapper.OpcMcpGatewayConfigMapper;
 import org.dromara.system.service.IOpcCoworkerService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,6 +51,8 @@ public class OpcCoworkerServiceImpl extends ServiceImpl<OpcCoworkerMapper, OpcCo
     private static final Set<String> VISIBILITIES = Set.of("public", "login", "subscribe");
 
     private final OpcCoworkerMcpToolMapper coworkerMcpToolMapper;
+    private final OpcMcpGatewayConfigMapper mcpGatewayConfigMapper;
+    private final OpcCoworkerCategoryMapper coworkerCategoryMapper;
 
     @Override
     public TableDataInfo<OpcCoworkerVo> queryPageList(OpcCoworkerQuery query) {
@@ -59,12 +65,44 @@ public class OpcCoworkerServiceImpl extends ServiceImpl<OpcCoworkerMapper, OpcCo
             List<OpcCoworker> list = listByQuery(query);
             Map<Long, List<OpcCoworkerToolItemVo>> tools = toolsByCoworkerIds(
                 list.stream().map(OpcCoworker::getCoworkerId).collect(Collectors.toSet()));
+            Map<Long, String> mcpNames = mcpConfigNameMap(list);
+            Map<Long, String> categoryNames = categoryNameMap(list);
             return list.stream().map(c -> {
                 OpcCoworkerVo vo = OpcCoworkerVo.from(c);
                 vo.setTools(tools.getOrDefault(c.getCoworkerId(), List.of()));
+                if (c.getMcpConfigId() != null) {
+                    vo.setMcpConfigName(mcpNames.get(c.getMcpConfigId()));
+                }
+                if (c.getCategoryId() != null) {
+                    vo.setCategoryName(categoryNames.get(c.getCategoryId()));
+                }
                 return vo;
             }).collect(Collectors.toList());
         });
+    }
+
+    private Map<Long, String> mcpConfigNameMap(List<OpcCoworker> list) {
+        Set<Long> ids = list.stream().map(OpcCoworker::getMcpConfigId).filter(Objects::nonNull).collect(Collectors.toSet());
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return mcpGatewayConfigMapper.selectList(Wrappers.<OpcMcpGatewayConfig>lambdaQuery()
+                .in(OpcMcpGatewayConfig::getConfigId, ids)
+                .select(OpcMcpGatewayConfig::getConfigId, OpcMcpGatewayConfig::getConfigName))
+            .stream()
+            .collect(Collectors.toMap(OpcMcpGatewayConfig::getConfigId, OpcMcpGatewayConfig::getConfigName, (a, b) -> a));
+    }
+
+    private Map<Long, String> categoryNameMap(List<OpcCoworker> list) {
+        Set<Long> ids = list.stream().map(OpcCoworker::getCategoryId).filter(Objects::nonNull).collect(Collectors.toSet());
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return coworkerCategoryMapper.selectList(Wrappers.<OpcCoworkerCategory>lambdaQuery()
+                .in(OpcCoworkerCategory::getCategoryId, ids)
+                .select(OpcCoworkerCategory::getCategoryId, OpcCoworkerCategory::getCategoryName))
+            .stream()
+            .collect(Collectors.toMap(OpcCoworkerCategory::getCategoryId, OpcCoworkerCategory::getCategoryName, (a, b) -> a));
     }
 
     private List<OpcCoworker> listByQuery(OpcCoworkerQuery query) {
@@ -72,6 +110,11 @@ public class OpcCoworkerServiceImpl extends ServiceImpl<OpcCoworkerMapper, OpcCo
         lqw.like(StringUtils.isNotBlank(query.getPersonaKey()), OpcCoworker::getPersonaKey, query.getPersonaKey());
         lqw.like(StringUtils.isNotBlank(query.getName()), OpcCoworker::getName, query.getName());
         lqw.eq(StringUtils.isNotBlank(query.getGroupKey()), OpcCoworker::getGroupKey, query.getGroupKey());
+        if (Boolean.TRUE.equals(query.getUncategorized())) {
+            lqw.isNull(OpcCoworker::getCategoryId);
+        } else if (query.getCategoryId() != null) {
+            lqw.eq(OpcCoworker::getCategoryId, query.getCategoryId());
+        }
         lqw.eq(StringUtils.isNotBlank(query.getStatus()), OpcCoworker::getStatus, query.getStatus());
         lqw.eq(StringUtils.isNotBlank(query.getVisibility()), OpcCoworker::getVisibility, query.getVisibility());
         lqw.orderByAsc(OpcCoworker::getSortOrder).orderByDesc(OpcCoworker::getCoworkerId);
@@ -84,6 +127,12 @@ public class OpcCoworkerServiceImpl extends ServiceImpl<OpcCoworkerMapper, OpcCo
         OpcCoworkerVo vo = OpcCoworkerVo.from(entity);
         if (vo != null) {
             vo.setTools(toolsByCoworkerIds(Set.of(coworkerId)).getOrDefault(coworkerId, List.of()));
+            if (entity != null && entity.getCategoryId() != null) {
+                OpcCoworkerCategory cat = coworkerCategoryMapper.selectById(entity.getCategoryId());
+                if (cat != null) {
+                    vo.setCategoryName(cat.getCategoryName());
+                }
+            }
         }
         return vo;
     }
@@ -232,8 +281,16 @@ public class OpcCoworkerServiceImpl extends ServiceImpl<OpcCoworkerMapper, OpcCo
         entity.setDescription(StrUtil.blankToDefault(bo.getDescription(), ""));
         entity.setIcon(StrUtil.blankToDefault(bo.getIcon(), ""));
         entity.setGroupKey(StrUtil.blankToDefault(bo.getGroupKey(), "general"));
+        if (bo.getCategoryId() != null) {
+            OpcCoworkerCategory cat = coworkerCategoryMapper.selectById(bo.getCategoryId());
+            if (cat == null || !"1".equals(cat.getStatus())) {
+                throw new ServiceException("所选分类不存在或已停用");
+            }
+        }
+        entity.setCategoryId(bo.getCategoryId());
         entity.setVersion(StrUtil.blankToDefault(bo.getVersion(), "1.0.0"));
         entity.setVisibility(StrUtil.blankToDefault(bo.getVisibility(), "subscribe"));
+        entity.setMcpConfigId(bo.getMcpConfigId());
         entity.setSortOrder(bo.getSortOrder() == null ? 0 : bo.getSortOrder());
         entity.setStatus(StrUtil.blankToDefault(bo.getStatus(), "1"));
         entity.setRemark(bo.getRemark());

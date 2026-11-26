@@ -14,7 +14,7 @@ import java.io.Serial;
 import java.util.Date;
 
 /**
- * OPC MCP 网关组织配置（每租户一行）
+ * OPC MCP 网关配置（可多条，同事按 config_id 绑定不同秘钥）
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -27,6 +27,9 @@ public class OpcMcpGatewayConfig extends TenantEntity {
     @TableId(value = "config_id", type = IdType.AUTO)
     private Long configId;
 
+    /** 配置名称 */
+    private String configName;
+
     private String gatewayBaseUrl;
 
     private String gatewayApiKey;
@@ -36,6 +39,11 @@ public class OpcMcpGatewayConfig extends TenantEntity {
     private String adminToken;
 
     private String remark;
+
+    /** 1正常 0停用 */
+    private String status;
+
+    private Integer sortOrder;
 
     @TableLogic
     @TableField(fill = FieldFill.INSERT)

@@ -1,6 +1,7 @@
 package org.dromara.system.domain;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -39,6 +40,10 @@ public class OpcCoworker extends TenantEntity {
 
     private String groupKey;
 
+    /** 所属分类（可空 = 未分类；更新时允许置空） */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private Long categoryId;
+
     private String version;
 
     /** zip base64（可含 data URL 前缀） */
@@ -50,6 +55,9 @@ public class OpcCoworker extends TenantEntity {
 
     /** public | login | subscribe */
     private String visibility;
+
+    /** 绑定的 MCP 网关配置 */
+    private Long mcpConfigId;
 
     private Integer sortOrder;
 
